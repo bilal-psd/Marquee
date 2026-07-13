@@ -5,11 +5,11 @@ final class MenuBarPanelView: NSView {
     private let controller: PlaybackController
     private var cancellables = Set<AnyCancellable>()
 
-    private let prevButton = NSButton()
-    private let playButton = NSButton()
-    private let nextButton = NSButton()
+    private let prevButton = MenuBarButton()
+    private let playButton = MenuBarButton()
+    private let nextButton = MenuBarButton()
     private let marquee = MarqueeLabel()
-    private let idleLabel = NSTextField(labelWithString: "Nothing playing")
+    private let idleLabel = MenuBarIdleLabel(labelWithString: "Nothing playing")
 
     private let panelHeight = NSStatusBar.system.thickness
     private let maxMarqueeWidth: CGFloat = 160
@@ -30,6 +30,9 @@ final class MenuBarPanelView: NSView {
 
     /// Called when the panel's preferred width changes (e.g. track title length).
     var onWidthChange: (() -> Void)?
+
+    /// Right-click menu (About, GitHub, Quit) — set by AppDelegate.
+    var contextMenu: NSMenu?
 
     init(controller: PlaybackController) {
         self.controller = controller
@@ -56,6 +59,10 @@ final class MenuBarPanelView: NSView {
         guard isDisplayAwake != awake else { return }
         isDisplayAwake = awake
         updateMarqueeActive()
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        contextMenu
     }
 
     private func setup() {
@@ -134,7 +141,7 @@ final class MenuBarPanelView: NSView {
         return image
     }
 
-    private func configure(button: NSButton, image: NSImage?, action: Selector) {
+    private func configure(button: MenuBarButton, image: NSImage?, action: Selector) {
         button.bezelStyle = .inline
         button.isBordered = false
         button.target = self

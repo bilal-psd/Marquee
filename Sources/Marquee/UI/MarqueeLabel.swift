@@ -12,7 +12,8 @@ import QuartzCore
 ///
 /// The scroll timer only runs while `isActive` is true (playing), the view is
 /// on-screen, and the text actually overflows — so it costs nothing while
-/// paused, hidden, or the display is asleep.
+/// paused, hidden, or the display is asleep. Scrolling waits `startDelay`
+/// before beginning, then eases in to full speed over `easeInDuration`.
 final class MarqueeLabel: NSView {
     var text: String = "" {
         didSet {
@@ -52,11 +53,15 @@ final class MarqueeLabel: NSView {
     private let copyA = NSTextField(labelWithString: "")
     private let copyB = NSTextField(labelWithString: "")
     private let gap: CGFloat = 44
-    private let speed: CGFloat = 18 // points per second
+    private let speed: CGFloat = 18 // points per second at full ramp
+    private let startDelay: TimeInterval = 1.0
+    private let easeInDuration: TimeInterval = 1.0
 
     private var textWidth: CGFloat = 0
     private var offset: CGFloat = 0
     private var scrollTimer: Timer?
+    private var startDelayWorkItem: DispatchWorkItem?
+    private var scrollStartTime: TimeInterval?
     private var lastTick: TimeInterval = 0
 
     override init(frame frameRect: NSRect) {
@@ -70,7 +75,7 @@ final class MarqueeLabel: NSView {
     }
 
     deinit {
-        scrollTimer?.invalidate()
+        cancelScrolling()
     }
 
     private func setup() {
@@ -105,6 +110,7 @@ final class MarqueeLabel: NSView {
         textWidth = measuredWidth(text)
         offset = 0
         positionCopies()
+        cancelScrolling()
         updateTimerState()
     }
 
@@ -132,15 +138,32 @@ final class MarqueeLabel: NSView {
     private func updateTimerState() {
         let shouldScroll = isActive && needsScroll && window != nil && !isHiddenOrHasHiddenAncestor
         if shouldScroll {
-            startTimer()
+            scheduleScrollStart()
         } else {
-            stopTimer()
+            cancelScrolling(resetPosition: true)
         }
     }
 
-    private func startTimer() {
+    private func scheduleScrollStart() {
+        guard scrollTimer == nil, startDelayWorkItem == nil else { return }
+
+        let item = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.startDelayWorkItem = nil
+            self.beginScrolling()
+        }
+        startDelayWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + startDelay, execute: item)
+    }
+
+    private func beginScrolling() {
+        guard isActive, needsScroll, window != nil, !isHiddenOrHasHiddenAncestor else { return }
         guard scrollTimer == nil else { return }
-        lastTick = CACurrentMediaTime()
+
+        let now = CACurrentMediaTime()
+        scrollStartTime = now
+        lastTick = now
+
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.step()
         }
@@ -148,9 +171,23 @@ final class MarqueeLabel: NSView {
         scrollTimer = timer
     }
 
-    private func stopTimer() {
+    private func cancelScrolling(resetPosition: Bool = false) {
+        startDelayWorkItem?.cancel()
+        startDelayWorkItem = nil
         scrollTimer?.invalidate()
         scrollTimer = nil
+        scrollStartTime = nil
+        if resetPosition {
+            offset = 0
+            positionCopies()
+        }
+    }
+
+    /// Quadratic ease-in: speed ramps from 0 to `speed` over `easeInDuration`.
+    private func currentSpeed(at time: TimeInterval) -> CGFloat {
+        guard let scrollStartTime else { return 0 }
+        let progress = min(1, (time - scrollStartTime) / easeInDuration)
+        return speed * progress * progress
     }
 
     private func step() {
@@ -158,7 +195,10 @@ final class MarqueeLabel: NSView {
         let delta = CGFloat(now - lastTick)
         lastTick = now
 
-        offset -= speed * delta
+        let rate = currentSpeed(at: now)
+        guard rate > 0 else { return }
+
+        offset -= rate * delta
         if offset <= -period {
             offset += period
         }
@@ -168,5 +208,9 @@ final class MarqueeLabel: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         updateTimerState()
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        StatusItemContextMenu.menu(for: self)
     }
 }

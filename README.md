@@ -1,5 +1,9 @@
 # Marquee
 
+<p align="center">
+  <img src="Resources/AppIcon.png" alt="Marquee app icon" width="128" height="128">
+</p>
+
 A small macOS menu bar app that shows what you're listening to and lets you control playback — without opening Apple Music or Spotify.
 
 Controls and a scrolling track title sit right in the menu bar. No popover, no extra click.

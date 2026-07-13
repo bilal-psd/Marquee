@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let playbackController = PlaybackController()
     private var cancellables = Set<AnyCancellable>()
 
+    private let githubURL = URL(string: "https://github.com/bilal-psd/Marquee")!
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         observePlaybackChanges()
@@ -18,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelView.onWidthChange = { [weak self] in
             self?.updateStatusItemWidth()
         }
+        panelView.contextMenu = buildContextMenu()
         panelView.translatesAutoresizingMaskIntoConstraints = false
 
         statusItem = NSStatusBar.system.statusItem(withLength: panelView.intrinsicContentSize.width)
@@ -40,6 +43,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ])
 
         updateStatusItemWidth()
+    }
+
+    private func buildContextMenu() -> NSMenu {
+        let menu = NSMenu()
+
+        let aboutItem = NSMenuItem(title: "About Marquee", action: #selector(showAbout), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+
+        let githubItem = NSMenuItem(title: "View on GitHub", action: #selector(openGitHub), keyEquivalent: "")
+        githubItem.target = self
+        menu.addItem(githubItem)
+
+        menu.addItem(.separator())
+
+        let quitItem = NSMenuItem(title: "Quit Marquee", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        return menu
     }
 
     private func observePlaybackChanges() {
@@ -75,6 +98,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func displaysDidWake() {
         playbackController.resume()
         panelView.setDisplayAwake(true)
+    }
+
+    @objc private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(nil)
+    }
+
+    @objc private func openGitHub() {
+        NSWorkspace.shared.open(githubURL)
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
     }
 
     private func updateStatusItemWidth() {
