@@ -8,6 +8,10 @@ A small macOS menu bar app that shows what you're listening to and lets you cont
 
 Controls and a scrolling track title sit right in the menu bar. No popover, no extra click.
 
+<p align="center">
+  <img src="Resources/marquee-demo.jpg" alt="Marquee in the macOS menu bar showing playback controls and a scrolling track title" width="720">
+</p>
+
 ## Install
 
 ```bash
