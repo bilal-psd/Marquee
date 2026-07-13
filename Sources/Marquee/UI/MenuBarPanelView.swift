@@ -12,22 +12,31 @@ final class MenuBarPanelView: NSView {
     private let idleLabel = NSTextField(labelWithString: "Nothing playing")
 
     private let panelHeight = NSStatusBar.system.thickness
-    private let marqueeWidth: CGFloat = 160
+    private let maxMarqueeWidth: CGFloat = 160
     private let maxMetadataLength = 200
 
-    /// Trailing x of the control cluster (prev 18 + 2 + play 20 + 2 + next 18,
-    /// starting at leading inset 4) plus the 12pt gap before the marquee.
-    private let contentLeadingInset: CGFloat = 4 + 18 + 2 + 20 + 2 + 18 + 12
+    private let leadingInset: CGFloat = 4
     private let trailingInset: CGFloat = 6
+    private let controlsMarqueeGap: CGFloat = 12
+    private let controlsWidth: CGFloat = 18 + 2 + 20 + 2 + 18
 
+    private var marqueeWidthConstraint: NSLayoutConstraint!
     private var playImage: NSImage?
     private var pauseImage: NSImage?
     private var lastIsPlaying: Bool?
-    private var lastHadTrack: Bool?
+    private var lastTextAreaWidth: CGFloat?
     private var isDisplayAwake = true
+    private let idleTextWidth: CGFloat
+
+    /// Called when the panel's preferred width changes (e.g. track title length).
+    var onWidthChange: (() -> Void)?
 
     init(controller: PlaybackController) {
         self.controller = controller
+        let idleFont = NSFont.systemFont(ofSize: 11)
+        idleTextWidth = ceil(
+            ("Nothing playing" as NSString).size(withAttributes: [.font: idleFont]).width
+        ) + 1
         super.init(frame: NSRect(x: 0, y: 0, width: 175, height: NSStatusBar.system.thickness))
         setup()
         observe()
@@ -39,9 +48,7 @@ final class MenuBarPanelView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        let hasTrack = controller.nowPlaying != nil
-        let width = contentLeadingInset + (hasTrack ? marqueeWidth : 90) + trailingInset
-        return NSSize(width: width, height: panelHeight)
+        NSSize(width: panelWidth(textArea: currentTextAreaWidth()), height: panelHeight)
     }
 
     /// Called by the app delegate on display sleep/wake to pause the marquee.
@@ -62,7 +69,7 @@ final class MenuBarPanelView: NSView {
         idleLabel.font = .systemFont(ofSize: 11)
         idleLabel.textColor = .secondaryLabelColor
 
-        marquee.maxWidth = marqueeWidth
+        marquee.maxWidth = maxMarqueeWidth
         marquee.fontSize = 11
 
         [prevButton, playButton, nextButton, marquee, idleLabel].forEach {
@@ -70,8 +77,10 @@ final class MenuBarPanelView: NSView {
             addSubview($0)
         }
 
+        marqueeWidthConstraint = marquee.widthAnchor.constraint(equalToConstant: maxMarqueeWidth)
+
         NSLayoutConstraint.activate([
-            prevButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            prevButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: leadingInset),
             prevButton.centerYAnchor.constraint(equalTo: centerYAnchor),
             prevButton.widthAnchor.constraint(equalToConstant: 18),
             prevButton.heightAnchor.constraint(equalToConstant: 18),
@@ -86,15 +95,35 @@ final class MenuBarPanelView: NSView {
             nextButton.widthAnchor.constraint(equalToConstant: 18),
             nextButton.heightAnchor.constraint(equalToConstant: 18),
 
-            marquee.leadingAnchor.constraint(equalTo: nextButton.trailingAnchor, constant: 12),
+            marquee.leadingAnchor.constraint(equalTo: nextButton.trailingAnchor, constant: controlsMarqueeGap),
             marquee.centerYAnchor.constraint(equalTo: centerYAnchor),
-            marquee.widthAnchor.constraint(equalToConstant: marqueeWidth),
+            marqueeWidthConstraint,
             marquee.heightAnchor.constraint(equalToConstant: 15),
 
-            idleLabel.leadingAnchor.constraint(equalTo: nextButton.trailingAnchor, constant: 12),
+            idleLabel.leadingAnchor.constraint(equalTo: nextButton.trailingAnchor, constant: controlsMarqueeGap),
             idleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            idleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -6),
+            idleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -trailingInset),
         ])
+    }
+
+    private func panelWidth(textArea: CGFloat) -> CGFloat {
+        leadingInset + controlsWidth + controlsMarqueeGap + textArea + trailingInset
+    }
+
+    private func currentTextAreaWidth() -> CGFloat {
+        if controller.nowPlaying != nil {
+            return marquee.displayWidth
+        }
+        return idleTextWidth
+    }
+
+    private func updateTextAreaWidth() {
+        let width = currentTextAreaWidth()
+        guard lastTextAreaWidth == nil || abs(lastTextAreaWidth! - width) > 0.5 else { return }
+        lastTextAreaWidth = width
+        marqueeWidthConstraint.constant = width
+        invalidateIntrinsicContentSize()
+        onWidthChange?()
     }
 
     private func templateSymbol(_ name: String, pointSize: CGFloat) -> NSImage? {
@@ -130,10 +159,7 @@ final class MenuBarPanelView: NSView {
             idleLabel.isHidden = false
             setControlsEnabled(false)
             updateMarqueeActive()
-            if lastHadTrack != false {
-                lastHadTrack = false
-                invalidateIntrinsicContentSize()
-            }
+            updateTextAreaWidth()
             return
         }
 
@@ -146,11 +172,7 @@ final class MenuBarPanelView: NSView {
         idleLabel.isHidden = true
         setControlsEnabled(true)
         updateMarqueeActive()
-
-        if lastHadTrack != true {
-            lastHadTrack = true
-            invalidateIntrinsicContentSize()
-        }
+        updateTextAreaWidth()
     }
 
     private func updateMarqueeActive() {

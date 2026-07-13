@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         panelView = MenuBarPanelView(controller: playbackController)
+        panelView.onWidthChange = { [weak self] in
+            self?.updateStatusItemWidth()
+        }
         panelView.translatesAutoresizingMaskIntoConstraints = false
 
         statusItem = NSStatusBar.system.statusItem(withLength: panelView.intrinsicContentSize.width)

@@ -25,6 +25,12 @@ final class MarqueeLabel: NSView {
         didSet { needsLayout = true }
     }
 
+    /// Width the parent should allocate: full text when it fits, capped at
+    /// `maxWidth` when scrolling is needed.
+    var displayWidth: CGFloat {
+        min(textWidth, maxWidth)
+    }
+
     var fontSize: CGFloat = 12 {
         didSet {
             let font = NSFont.systemFont(ofSize: fontSize)
